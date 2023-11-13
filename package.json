@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "aai": "^15.0.0",
+    "tesseract.js": "^5.0.3"
+  }
+}

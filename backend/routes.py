@@ -126,10 +126,15 @@ def get_images():
                     "label": label
                 })
     pendingDocRequests = user.get("pendingDocRequests", [])
+    inboundDocRequests = user.get("inboundDocRequests", [])
+    # print('Pending Doc Requests: ', pendingDocRequests)
+    # print('pending doc type: ', type(pendingDocRequests))
+    # print('user ', user)
     response_data = {
         "username": current_user,
         "images": updated_images,
-        "pendingDocRequests": pendingDocRequests
+        "pendingDocRequests": pendingDocRequests,
+        "inboundDocRequests": inboundDocRequests
     }
 
     return jsonify(response_data)
@@ -187,7 +192,8 @@ def request_document():
     username = data['username']
     document_type = data['documentType']
     fromUser = data['from']
-
+    print('From User ', fromUser)
+    print('Document type ', document_type)
     try:
         # Update the user's pendingDocRequests using the mongo object
         print('pre success')
@@ -200,3 +206,140 @@ def request_document():
         return jsonify({'message': 'Document request successful'})
     except Exception as e:
         return jsonify({'error': 'An error occurred while processing your request.'}), 500
+
+
+@app.route('/updateDocClasses', methods=['POST'])
+def update_doc_classes():
+    # Obtain the token from the Authorization header.
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or 'Bearer' not in auth_header:
+        return jsonify(error="Not authenticated"), 401
+
+    token = auth_header.split(' ')[1]
+
+    try:
+        # Decode the JWT to get the current user's username
+        data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        current_user = data["username"]
+
+        if current_user is None:
+            return jsonify({"message": "Username not found in token"}), 401
+    except:
+        return jsonify({"message": "Token is invalid"}), 403
+
+    # Get the JSON data with the new label
+    data = request.get_json()
+    print('data: ', data)
+    if not data or 'newLabel' not in data:
+        return jsonify(error="Invalid data"), 400
+
+    new_label = data['newLabel']
+
+    print('newLabel: ', new_label)
+
+    try:
+        # Retrieve the users collection from the Mongo database
+        users = mongo.db.users
+
+        # Update the user's document to add the new label into storedDocClasses array
+        # This operation will add the new label only if it doesn't exist to prevent duplicates
+        result = users.update_one(
+            {"user": current_user},
+            {"$addToSet": {"storedDocClasses": new_label}}
+        )
+
+        if result.modified_count == 0:
+            # If the document wasn't modified, it could mean the label already exists
+            return jsonify(message="Label already exists or user not found"), 200
+
+        return jsonify(message="Stored document classes updated successfully"), 200
+    except Exception as e:
+        print(f"An error occurred while updating storedDocClasses: {e}")
+        return jsonify(error="An error occurred while updating storedDocClasses"), 500
+    
+
+    
+@app.route('/getUserClasses/<username>', methods=['GET'])
+def get_user_classes(username):
+    # Authentication block
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or 'Bearer ' not in auth_header:
+        return jsonify(error="Not authenticated"), 401
+
+    token = auth_header.split('Bearer ')[1]  # Split the token from "Bearer "
+
+    try:
+        # Verify JWT token
+        jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return jsonify({"message": "Token has expired"}), 401
+    except jwt.InvalidTokenError as e:
+        print(f"Error decoding token: {e}")
+        return jsonify({"message": "Token is invalid!"}), 403
+
+    print('Got to right be mongo.db.users.find_one()')
+    # Find the user by username provided as URL parameter
+    user = mongo.db.users.find_one({"user": username})
+    if not user:
+        return jsonify(error="User not found"), 404
+
+    # Get the stored document classes for the user
+    userClasses = user.get("storedDocClasses", [])
+    print('User Classes for:', username, userClasses)
+    
+    # Return the document classes
+    return jsonify(userClasses)
+
+
+@app.route('/fulfill-request', methods = ['POST'])
+def fulfill_request():
+    print('in fulfill_request post')
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or 'Bearer' not in auth_header:
+        return jsonify(error="Not authenticated"), 401
+
+    token = auth_header.split(' ')[1]
+    data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+
+    print('token, ', token)
+    print('data, ', data)
+
+    try:
+        # Parse the JSON data from the POST request
+        print('1')
+
+        request_data = request.json
+
+        print('Here is the request_data, ', request_data)
+
+        # Extract recipient, image, and label from the request data
+        recipient, image, label, fromUser = request_data.get("recipient"), request_data.get("image"), request_data.get("label"), request_data.get("fromUser")
+
+        # Now you can use recipient, image, and label as needed
+        print('Recipient, Image, Label, fromUser:', recipient, image, label, fromUser)
+
+        recipient_user = mongo.db.users.find_one({"user": recipient})
+        
+        if not recipient_user:
+            return jsonify({"error": "Recipient not found"}), 404
+
+        # Create a dictionary with the image and label to add to the recipient's inboundDocRequests
+        request_data = {"image": image, "label": label, 'fromUser': fromUser}
+
+        print('got to after request_data')
+        # Add the request_data to the recipient's inboundDocRequests list
+        mongo.db.users.update_one(
+            {"user": recipient},
+            {"$push": {"inboundDocRequests": request_data}}
+        )
+
+        print('Got right after mongo.db.users.update_one')
+
+        return jsonify({"message": "Fulfillment request sent successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": "An error occurred while processing the request"}), 500
+
+# Run the Flask development server
+if __name__ == '__main__':
+    app.run(debug=True)
+
