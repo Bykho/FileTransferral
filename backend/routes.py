@@ -339,7 +339,58 @@ def fulfill_request():
     except Exception as e:
         return jsonify({"error": "An error occurred while processing the request"}), 500
 
+
+
+@app.route('/homepage', methods=['GET'])
+def get_home():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or 'Bearer ' not in auth_header:
+        return jsonify(error="Not authenticated"), 401
+
+    token = auth_header.split('Bearer ')[1]
+
+    try:
+        data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        current_user = data["username"]
+
+    except Exception as e:
+        print(f"Error decoding token: {e}")
+        return jsonify({"message": "Token is invalid!"}), 403
+
+    user = mongo.db.users.find_one({"user": current_user})
+    if not user:
+        return jsonify(error="User not found"), 404
+
+    images = user.get("images", [])
+
+    # Modify the images list to include both URL and label
+    updated_images = []
+    for image_info in images:
+        if isinstance(image_info, dict):  # Check if image_info is a dictionary
+            filename = image_info.get("url", "")
+            label = image_info.get("label", "")
+            if filename:
+                updated_images.append({
+                    "url": f"http://127.0.0.1:5000/uploads/{filename}",  # Construct the image URL
+                    "label": label
+                })
+    pendingDocRequests = user.get("pendingDocRequests", [])
+    inboundDocRequests = user.get("inboundDocRequests", [])
+    # print('Pending Doc Requests: ', pendingDocRequests)
+    # print('pending doc type: ', type(pendingDocRequests))
+    # print('user ', user)
+    response_data = {
+        "username": current_user,
+        "images": updated_images,
+        "pendingDocRequests": pendingDocRequests,
+        "inboundDocRequests": inboundDocRequests
+    }
+
+    return jsonify(response_data)
+
+
 # Run the Flask development server
 if __name__ == '__main__':
     app.run(debug=True)
+
 
