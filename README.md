@@ -1,4 +1,4 @@
-** This repository is the precourser design to the SILO project. **
+**This repository is the precourser design to the SILO project.**
 
 In terms of Zero To One, this repo represents step 0.01.
 
