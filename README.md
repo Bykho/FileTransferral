@@ -30,3 +30,9 @@ Expanding Beyond Financial Data:
 
 While Silo's current primary focus is currently on financial data, our long-term vision is to make it a versatile platform for organizing and managing any type of document. Imagine a future where SILO effortlessly organizes your entire document ecosystem and allows for hired AI help to selectively engage with your data.
 
+Current Design:
+... Diagram to be added
+
+Future Design:
+<img width="617" alt="PNG image" src="https://github.com/Bykho/FileTransferral/assets/30449756/9510808d-8615-4e81-9d21-d6f93e30a8e0">
+
